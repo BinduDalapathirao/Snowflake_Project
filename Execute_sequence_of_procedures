@@ -1,0 +1,95 @@
+-----------Creating log table to log the execution status and details---------------
+
+create or replace table Proc_run_Log(
+LogID NUMBER AUTOINCREMENT,
+PROC_NAME STRING,
+START_TIME TIMESTAMP,
+END_TIME TIMESTAMP,
+STATUS STRING,
+ERR_MSG STRING
+);
+
+--------Create Proc 1--------------------
+CREATE OR REPLACE PROCEDURE CREATE_TAB()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+CREATE OR REPLACE TABLE TAB1(
+ID NUMBER PRIMARY KEY,
+FIRST_NAME STRING,
+LAST_NAME STRING,
+AGE NUMBER
+);
+RETURN 'TABLE CREATED';
+END;
+$$;
+
+--------------------Create Proc 2-----------------------
+
+CREATE OR REPLACE PROCEDURE INSERT_DATA()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    INSERT INTO TAB1 VALUES (1,'JOHN','DUES',31),(2,'MARK','HOGAN',35),(3,'STEVE','HUGHES',27);
+    RETURN 'DATA INSERTED';  
+END;
+$$;
+
+--------------------Create Proc 3-----------------------
+
+CREATE OR REPLACE PROCEDURE DROP_TAB()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    DROP TABLE TAB1;
+    RETURN 'TABLE DROPPED';
+END;
+$$;
+
+-------------------------Create procedure to execute multiple procedures in sequence and execution should be log into log table--------------------------------------
+
+CREATE OR REPLACE PROCEDURE PROCEDURE_SEQUENCE()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    V_PROC_NAME STRING;
+    V_START_TIME TIMESTAMP;
+    V_END_TIME TIMESTAMP;
+    V_STATUS STRING;
+    V_ERR_MSG STRING;
+    PROC_LIST ARRAY DEFAULT ARRAY_CONSTRUCT('CREATE_TAB', 'INSERT_DATA', 'DROP_TAB');
+    V_SQL_COMMAND STRING; -- To hold the dynamic SQL for EXECUTE IMMEDIATE
+BEGIN
+   FOR I IN 0 TO ARRAY_SIZE(PROC_LIST) - 1 DO
+        V_PROC_NAME := PROC_LIST[I];
+        V_START_TIME := CURRENT_TIMESTAMP();
+
+        BEGIN
+            -- Construct the dynamic CALL statement
+            EXECUTE IMMEDIATE 'CALL ' || V_PROC_NAME || '()';
+          --  V_SQL_COMMAND := 'CALL ' || V_PROC_NAME || '()';
+           -- EXECUTE IMMEDIATE :V_SQL_COMMAND; -- Execute the dynamic SQL
+
+            V_STATUS := 'SUCCESS';
+            V_ERR_MSG := NULL;
+        EXCEPTION WHEN OTHER THEN
+            V_STATUS := 'FAILURE';
+            V_ERR_MSG := 'Error executing procedure ' || V_PROC_NAME || ': ' || GET_SQL_ERR_MSG();
+        END;
+
+        V_END_TIME := CURRENT_TIMESTAMP();
+
+        INSERT INTO Proc_run_Log (PROC_NAME, START_TIME, END_TIME, STATUS, ERR_MSG)
+        VALUES (:V_PROC_NAME, :V_START_TIME, :V_END_TIME, :V_STATUS, :V_ERR_MSG);
+    END FOR;
+    RETURN 'ALL PROCEDURES EXECUTED SUCCESSFULLY';
+END;
+$$;
